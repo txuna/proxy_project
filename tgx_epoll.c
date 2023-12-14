@@ -27,6 +27,28 @@ err:
     return NULL;
 }
 
+tgx_err_t eventloop_delevent(struct tgx_eventloop *eventloop, struct tgx_file *file)
+{
+    if(file == NULL)
+    {
+        return TGX_DEL_EVENT_ERROR;
+    }
+
+    struct epoll_event ee = {0};
+    ee.data.fd = file->fd; 
+    ee.events = file->mask;
+
+    if(epoll_ctl(eventloop->epfd, EPOLL_CTL_DEL, file->fd, &ee) < 0)
+    {
+        return TGX_DEL_EVENT_ERROR;
+    }
+
+    close(file->fd);
+    list_del(&file->list);
+    free(file);
+    return TGX_OK;
+}
+
 tgx_err_t eventloop_addevent(struct tgx_eventloop *eventloop, struct tgx_file *file)
 {
     struct epoll_event ee = {0};

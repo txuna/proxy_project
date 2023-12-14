@@ -146,14 +146,42 @@ void tgx_worker_poll(struct tgx_server *server, struct tgx_eventloop *eventloop,
         for(int i=0; i<retval; i++)
         {
             struct tgx_file *file = eventloop->fired[i];
+            if((file->fire_event & EPOLLERR)
+            || (file->fire_event & EPOLLRDHUP))
+            {
+                /* DELETE FILE */
+                if(eventloop_delevent(eventloop, file) != TGX_OK)
+                {
+                    continue;
+                }
+            }
             
             switch (file->type)
             {
             case TGX_PIPE:
+            {
+                /**
+                 * 라우팅 테이블 덮기(업데이트)
+                */
                 break;
+            }
 
             case TGX_TCP:
+            {
+                /**
+                 * 해당 서비스포트를 라우팅 테이블에서 찾고 해당 주소로 소켓 만들고 connect
+                 * 그리고 해당 소켓은 종단에서 끊을 때까지 이벤트 보관
+                 * 이벤트가 도착하면 페어 파일에게 write 
+                 * 이때 페어파일은? 어떻게 알지? 따로 저장? 
+                 * 
+                 * 또한 이 모든 작업은 스레드 풀에서 처리?
+                 * 그럼 eventloop랑 server lock걸어야 하나?
+                 * 아니면 그냥 스레드가 알아서 위 모든 과정을 처리? - 요청 하나당 스레드? 그럼 따로 넣고 빼고 할 필요없이
+                 * 스레드 넘겨줄 때 그냥 라우팅 테이블만 찾아서 넣어주면 될듯
+                */
                 break;
+            }
+                
 
             case TGX_UDP:
                 break;

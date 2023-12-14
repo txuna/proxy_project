@@ -27,6 +27,8 @@ tgx_err_t init_server(struct tgx_server *server);
 void cleanup_process(struct tgx_server *server);
 void kill_process(struct tgx_server *server);
 tgx_err_t do_proxy_eventloop(struct tgx_server *server);
-
+tgx_err_t do_proxy_pipe(struct tgx_server *server, struct tgx_eventloop *eventloop);
+tgx_err_t do_proxy_bind(struct tgx_server *server, struct tgx_eventloop *eventloop);
+void do_porxy_poll(struct tgx_server *server, struct tgx_eventloop *eventloop);
 
 #endif

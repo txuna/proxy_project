@@ -48,7 +48,7 @@ tgx_err_t do_bind(struct tgx_server *server, struct tgx_eventloop *eventloop, in
 struct tgx_file *file_alloc(int fd, int mask, int type);
 struct tgx_eventloop *eventloop_alloc(int timeout);
 tgx_err_t eventloop_addevent(struct tgx_eventloop *eventloop, struct tgx_file *file);
-tgx_err_t eventloop_delevent();
+tgx_err_t eventloop_delevent(struct tgx_eventloop *eventloop, struct tgx_file *file);
 int eventloop_poll(struct tgx_eventloop *eventloop);
 void set_handler();
 

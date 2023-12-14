@@ -112,11 +112,98 @@ tgx_err_t do_proxy_eventloop(struct tgx_server *server)
         return TGX_ALLOC_ERROR;
     }
 
+    /* 파이프 세팅 */
+    if(do_proxy_pipe(server, eventloop) != TGX_OK)
+    {
+        return TGX_PIPE_ERROR;
+    }
+
+    if(do_proxy_bind(server, eventloop) != TGX_OK)
+    {
+        return TGX_SOCK_ERROR;
+    }
+
+    do_porxy_poll(server, eventloop);
+ 
+    free_eventloop(eventloop);
+    return TGX_OK;
+}
+
+void do_porxy_poll(struct tgx_server *server, struct tgx_eventloop *eventloop)
+{
+    while(true)
+    {
+        int retval = eventloop_poll(eventloop);
+        if(retval <= 0)
+        {
+            continue;
+        }
+
+        for(int i=0; i<retval; i++)
+        {
+            struct tgx_file *file = eventloop->fired[i];
+            if((file->fire_event & EPOLLERR)
+            || (file->fire_event & EPOLLRDHUP))
+            {
+                /* DELETE FILE */
+                if(eventloop_delevent(eventloop, file) != TGX_OK)
+                {
+                    continue;
+                }
+            }
+
+            switch (file->type)
+            {
+            case TGX_TCP:
+            {
+                break;
+            }
+            
+            default:
+                break;
+            }
+        }
+
+        free(eventloop->fired);
+    }
+}
+
+tgx_err_t do_proxy_bind(struct tgx_server *server, struct tgx_eventloop *eventloop)
+{
+    int listener_fd; 
+    tgx_err_t err; 
+
+    err = net_tcp_open(&listener_fd, server->bind_port);
+    if(err != TGX_OK)
+    {
+        return TGX_SOCK_ERROR;
+    }
+    struct tgx_file *file = file_alloc(listener_fd, EPOLLIN, TGX_TCP);
+    if(file == NULL)
+    {
+        printf("HELLO WORLD\n");
+        close(listener_fd);
+        return TGX_ALLOC_ERROR;
+    }
+
+    if(eventloop_addevent(eventloop, file) != TGX_OK)
+    {
+        printf("HELLO WORLD\n");
+        close(listener_fd);
+        free(file);
+        return TGX_ADD_EVENT_ERROR;
+    }
+
+    return TGX_OK;
+}
+
+tgx_err_t do_proxy_pipe(struct tgx_server *server, struct tgx_eventloop *eventloop)
+{
     for(int i=0; i<server->service_len; i++)
     {
         int *pipe = server->pipes[i];
         close(pipe[out]);
-        
+
         /**
          * 해당 디스크립터는 이벤트 알림을 받지 않고 직접 루프돌려서 라우팅 테이블 전송할 것이기에 
          * 필요없는 플래그인 EPOLLIN으로 세팅 - 해당 디스크립터는 write만 가능
@@ -131,15 +218,8 @@ tgx_err_t do_proxy_eventloop(struct tgx_server *server)
         {
             return TGX_ADD_EVENT_ERROR;
         }
-
-        
-        write(pipe[in], "1234", 4);
     }
 
-    sleep(2);
-    kill_process(server);
-
-    free_eventloop(eventloop);
     return TGX_OK;
 }
 
