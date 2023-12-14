@@ -123,6 +123,7 @@ tgx_err_t do_proxy_eventloop(struct tgx_server *server)
         return TGX_SOCK_ERROR;
     }
 
+    /* 메인 프록시 폴링 시작 */
     do_porxy_poll(server, eventloop);
  
     free_eventloop(eventloop);
@@ -152,6 +153,7 @@ void do_porxy_poll(struct tgx_server *server, struct tgx_eventloop *eventloop)
                 }
             }
 
+            /* 특정 클라우드 라우팅 테이블이 도착하면 기존꺼 덮기 */
             switch (file->type)
             {
             case TGX_TCP:
@@ -181,14 +183,12 @@ tgx_err_t do_proxy_bind(struct tgx_server *server, struct tgx_eventloop *eventlo
     struct tgx_file *file = file_alloc(listener_fd, EPOLLIN, TGX_TCP);
     if(file == NULL)
     {
-        printf("HELLO WORLD\n");
         close(listener_fd);
         return TGX_ALLOC_ERROR;
     }
 
     if(eventloop_addevent(eventloop, file) != TGX_OK)
     {
-        printf("HELLO WORLD\n");
         close(listener_fd);
         free(file);
         return TGX_ADD_EVENT_ERROR;

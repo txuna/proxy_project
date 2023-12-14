@@ -119,3 +119,82 @@ tgx_err_t net_udp_open(int* fd, int port)
     return TGX_OK;
 }
 
+static int __net_tcp_connect()
+{
+
+}
+
+tgx_err_t net_tcp_connect()
+{
+
+}
+
+static int __net_tcp_accept()
+{
+
+}
+
+tgx_err_t net_tcp_accept()
+{
+
+}
+
+static int __net_tcp_read()
+{
+
+}
+
+tgx_err_t net_tcp_read()
+{
+
+}
+
+static int __net_tcp_send()
+{
+
+}
+
+tgx_err_t net_tcp_send()
+{
+
+}
+
+static int __net_udp_read()
+{
+
+}
+
+tgx_err_t net_udp_read()
+{
+
+}
+
+static int __net_udp_send()
+{
+
+}
+
+tgx_err_t net_udp_send()
+{
+
+}
+
+static int __pipe_read()
+{
+
+}
+
+tgx_err_t pipe_read()
+{
+
+}
+
+static int __pipe_send()
+{
+
+}
+
+tgx_err_t pipe_send()
+{
+
+}

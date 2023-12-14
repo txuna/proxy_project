@@ -21,4 +21,15 @@
 tgx_err_t net_tcp_open(int* fd, int port);
 tgx_err_t net_udp_open(int* fd, int port);
 
+tgx_err_t net_tcp_connect();
+tgx_err_t net_tcp_accept();
+
+tgx_err_t net_tcp_read();
+tgx_err_t net_tcp_send();
+
+tgx_err_t net_udp_read();
+tgx_err_t net_udp_read();
+
+tgx_err_t pipe_read();
+tgx_err_t pipe_write();
 #endif
