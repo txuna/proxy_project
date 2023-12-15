@@ -1,4 +1,5 @@
 from flask import Flask
+import sys
 
 app = Flask(__name__)
 
@@ -7,4 +8,4 @@ def welcome():
   return "Welcome to this page"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=30000)
+    app.run(host="0.0.0.0", port=int(sys.argv[1]))
