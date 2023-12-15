@@ -159,12 +159,12 @@ void tgx_worker_poll(struct tgx_server *server, struct tgx_eventloop *eventloop,
             || (file->fire_event & EPOLLRDHUP)
             || (file->fire_event & EPOLLHUP))
             {
+                printf("[WORKER]DELETE EVENT : %d\n", file->fd);
                 /* DELETE FILE */
                 if(eventloop_delevent(eventloop, file) != TGX_OK)
                 {
                     continue;
                 }
-                printf("[WORKER]DELETE EVENT : %d\n", file->fd);
             }
 
             /* 읽기 이벤트가 없다면 */

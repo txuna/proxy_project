@@ -156,12 +156,12 @@ void do_porxy_poll(struct tgx_server *server, struct tgx_eventloop *eventloop)
             || (file->fire_event & EPOLLRDHUP)
             || (file->fire_event & EPOLLHUP))
             {
+                printf("[MASTER]DELETE EVENT : %d\n", file->fd);
                 /* DELETE FILE */
                 if(eventloop_delevent(eventloop, file) != TGX_OK)
                 {
                     continue;
                 }
-                printf("[MASTER]DELETE EVENT : %d\n", file->fd);
             }
 
             /* 특정 클라우드 라우팅 테이블이 도착하면 기존꺼 덮기 */
