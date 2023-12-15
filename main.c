@@ -106,7 +106,7 @@ tgx_err_t init_server(struct tgx_server *server)
 
 tgx_err_t do_proxy_eventloop(struct tgx_server *server)
 {
-    struct tgx_eventloop *eventloop = eventloop_alloc(10);
+    struct tgx_eventloop *eventloop = eventloop_alloc(INFINITE);
     if(eventloop == NULL)
     {
         return TGX_ALLOC_ERROR;

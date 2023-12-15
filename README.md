@@ -44,12 +44,14 @@ application =
         {
             name = "AWS Proxy";
             host = "127.0.0.1";
-            port = 10001;               
+            port = 10001;          
+            list = (15000, 15001); 
         },
         {
             name = "GCP Proxy";
             host = "127.0.0.1";
-            port = 10002;               
+            port = 10002;         
+            list = (15000, 15001);       
         }
     );
     
