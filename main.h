@@ -31,4 +31,9 @@ tgx_err_t do_proxy_pipe(struct tgx_server *server, struct tgx_eventloop *eventlo
 tgx_err_t do_proxy_bind(struct tgx_server *server, struct tgx_eventloop *eventloop);
 void do_porxy_poll(struct tgx_server *server, struct tgx_eventloop *eventloop);
 
+struct tgx_route_table *find_route(struct tgx_server *server, int port);
+tgx_err_t do_proxy_tcp_process(struct tgx_server *server, struct tgx_eventloop *eventloop, struct tgx_file *listener);
+void do_proxy_network_process(void *arg);
+
+
 #endif

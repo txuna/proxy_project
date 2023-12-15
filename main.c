@@ -123,6 +123,9 @@ tgx_err_t do_proxy_eventloop(struct tgx_server *server)
         return TGX_SOCK_ERROR;
     }
 
+    /* 스레드 풀 생성 */
+    eventloop->thpool = thpool_init(MAX_THREAD_POOL);
+
     /* 메인 프록시 폴링 시작 */
     do_porxy_poll(server, eventloop);
     
@@ -150,13 +153,15 @@ void do_porxy_poll(struct tgx_server *server, struct tgx_eventloop *eventloop)
         {
             struct tgx_file *file = eventloop->fired[i];
             if((file->fire_event & EPOLLERR)
-            || (file->fire_event & EPOLLRDHUP))
+            || (file->fire_event & EPOLLRDHUP)
+            || (file->fire_event & EPOLLHUP))
             {
                 /* DELETE FILE */
                 if(eventloop_delevent(eventloop, file) != TGX_OK)
                 {
                     continue;
                 }
+                printf("[MASTER]DELETE EVENT : %d\n", file->fd);
             }
 
             /* 특정 클라우드 라우팅 테이블이 도착하면 기존꺼 덮기 */
@@ -164,6 +169,17 @@ void do_porxy_poll(struct tgx_server *server, struct tgx_eventloop *eventloop)
             {
             case TGX_TCP:
             {
+                if(file->sock.is_listen)
+                {
+                    if(do_proxy_tcp_process(server, eventloop, file) != TGX_OK)
+                    {
+                        continue;
+                    }
+                }
+                else
+                {
+                    thpool_add_work(eventloop->thpool, do_proxy_network_process, (void*)file);
+                }
                 break;
             }
             
@@ -176,28 +192,190 @@ void do_porxy_poll(struct tgx_server *server, struct tgx_eventloop *eventloop)
     }
 }
 
-tgx_err_t do_proxy_bind(struct tgx_server *server, struct tgx_eventloop *eventloop)
+struct tgx_route_table *find_route(struct tgx_server *server, int port)
 {
-    int listener_fd; 
-    tgx_err_t err; 
+    struct tgx_route_table *rt; 
+    list_for_each_entry(rt, &server->route_table, list)
+    {
+        if(rt->port == port)
+        {
+            return rt;
+        }
+    }
 
-    err = net_tcp_open(&listener_fd, server->bind_port);
-    if(err != TGX_OK)
+    return NULL;
+}
+
+/**
+ * accept and connect
+*/
+tgx_err_t do_proxy_tcp_process(struct tgx_server *server, struct tgx_eventloop *eventloop, struct tgx_file *listener)
+{
+    int accept_fd, connect_fd; 
+
+    if(net_tcp_accept(&accept_fd, listener->fd) != TGX_OK)
     {
         return TGX_SOCK_ERROR;
     }
-    struct tgx_file *file = file_alloc(listener_fd, EPOLLIN, TGX_TCP);
-    if(file == NULL)
+
+    struct tgx_file *accept_file = file_alloc(accept_fd, EPOLLET | EPOLLIN | EPOLLHUP | EPOLLRDHUP | EPOLLERR, TGX_TCP);
+    if(accept_file == NULL)
     {
-        close(listener_fd);
-        return TGX_ALLOC_ERROR;
+        close(accept_fd);
+        return TGX_SOCK_ERROR;
     }
 
-    if(eventloop_addevent(eventloop, file) != TGX_OK)
+    if(eventloop_addevent(eventloop, accept_file) != TGX_OK)
     {
-        close(listener_fd);
-        free(file);
-        return TGX_ADD_EVENT_ERROR;
+        close(accept_fd);
+        free(accept_file);
+        return TGX_SOCK_ERROR;
+    }
+
+    struct tgx_route_table *rt = find_route(server, listener->sock.v.port);
+    if(rt == NULL)
+    {
+        eventloop_delevent(eventloop, accept_file);
+    }
+
+    if(net_tcp_connect(&connect_fd, rt->host, rt->port) != TGX_OK)
+    {
+        return TGX_SOCK_ERROR;
+    }
+
+    struct tgx_file *connect_file = file_alloc(connect_fd, EPOLLET | EPOLLIN | EPOLLHUP | EPOLLRDHUP | EPOLLERR, TGX_TCP);
+    if(connect_file == NULL)
+    {
+        eventloop_delevent(eventloop, accept_file);
+        close(connect_fd);
+        return TGX_SOCK_ERROR;
+    }
+
+    if(eventloop_addevent(eventloop, connect_file) != TGX_OK)
+    {
+        eventloop_delevent(eventloop, accept_file);
+        close(connect_fd);
+        free(connect_file);
+        return TGX_SOCK_ERROR;
+    }
+
+    accept_file->sock.is_listen = false;
+    connect_file->sock.is_listen = false;
+
+    accept_file->sock.v.pair_fd = connect_file->fd;
+    connect_file->sock.v.pair_fd = accept_file->fd;
+
+    printf("accept fd : %d\n", accept_fd);
+    printf("connect fd : %d\n", connect_fd);
+
+    return TGX_OK;
+}
+
+void do_proxy_network_process(void *arg)
+{
+    struct tgx_file *file = (struct tgx_file*)arg;
+    int can_read_len; 
+    int size = SOCK_BUFFER;
+    char *buffer = calloc(1, sizeof(char) * SOCK_BUFFER);
+    int nsize = 0;
+    int total_size = 0;
+    /* 여기서 끝내면 EPOLLET라서 데이터를 못 읽는데 조금 더 우아하게 끝내는 법 찾기 */
+    if(buffer == NULL)
+    {
+        return;
+    }
+    
+    while(true)
+    {
+        nsize = read(file->fd, buffer, size);
+        if(nsize < 0)
+        {
+            if(errno == EAGAIN)
+            {
+                continue;
+            }
+            else
+            {
+                break;
+            }
+        }
+        total_size += nsize;
+        /**
+         * 더 읽을 버퍼가 있다는 뜻
+        */
+        if(nsize == SOCK_BUFFER)
+        {
+            if(socket_nread(file->fd, &can_read_len) == -1)
+            {
+                break;
+            }
+
+            total_size += can_read_len;
+            // NEED TO CHECK NULL;
+            buffer = realloc(buffer, sizeof(char) * total_size);
+            if(buffer == NULL)
+            {
+                return;
+            }
+            size = can_read_len;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    while(true)
+    {
+        int ret = write(file->sock.v.pair_fd, buffer, total_size);
+        if(ret < 0)
+        {
+            if(errno == EAGAIN)
+            {
+                continue;
+            }
+
+            break;
+        }
+
+        break;
+    }
+
+    return;
+}
+
+/**
+ * 라우팅 테이블만큼 바인딩 하기
+*/
+tgx_err_t do_proxy_bind(struct tgx_server *server, struct tgx_eventloop *eventloop)
+{
+    tgx_err_t err; 
+    struct tgx_route_table *rt;
+    list_for_each_entry(rt, &server->route_table, list)
+    {
+        int bind_fd;
+        err = net_tcp_open(&bind_fd, rt->port);
+        if(err != TGX_OK)
+        {
+            return TGX_SOCK_ERROR;
+        }
+
+        struct tgx_file *file = file_alloc(bind_fd, EPOLLIN | EPOLLHUP | EPOLLRDHUP | EPOLLERR, TGX_TCP);
+        if(file == NULL)
+        {
+            close(bind_fd);
+            return TGX_ALLOC_ERROR;
+        }
+
+        if(eventloop_addevent(eventloop, file) != TGX_OK)
+        {
+            close(bind_fd);
+            free(file);
+            return TGX_ADD_EVENT_ERROR;
+        }
+
+        file->sock.is_listen = true;
+        file->sock.v.port = rt->port;
     }
 
     return TGX_OK;
@@ -289,6 +467,7 @@ void free_eventloop(struct tgx_eventloop *eventloop)
 
 void free_server(struct tgx_server *server)
 {
+    struct tgx_route_table *rt, *tmp;
     if(server == NULL)
     {
         return;
@@ -319,12 +498,6 @@ void free_server(struct tgx_server *server)
         free(server->service);
     }
 
-    /* 라우팅 테이블 해제 */
-    if(server->route_table != NULL)
-    {
-        free(server->route_table);
-    }
-
     /* 통신 파이프라인 닫기 */
     if(server->pipes != NULL)
     {
@@ -347,6 +520,14 @@ void free_server(struct tgx_server *server)
         free(server->process_list);
     }
 
+    /* 라우팅 테이블 해제 */
+    list_for_each_entry_safe(rt, tmp, &server->route_table, list)
+    {
+        list_del(&rt->list);
+        sdsfree(rt->host);
+        free(rt);
+    }
+
     free(server);
     return;
 }
@@ -357,8 +538,8 @@ tgx_err_t parse_cgf(struct tgx_server *server)
     config_t cfg; 
     config_setting_t *setting;
     const char *sname;
-    int max_route_len;
-
+    
+    INIT_LIST_HEAD(&server->route_table);
     config_init(&cfg);
 
     if(!config_read_file(&cfg, "config.cfg"))
@@ -383,21 +564,6 @@ tgx_err_t parse_cgf(struct tgx_server *server)
         fprintf(stderr, "Cannot Found Bind Port\n");
         config_destroy(&cfg);
         return TGX_PARSE_ERROR;
-    }
-
-    if(!config_lookup_int(&cfg, "max_route_table", &max_route_len))
-    {
-        fprintf(stderr, "Cannot Found Max Route Table Len\n");
-        config_destroy(&cfg);
-        return TGX_PARSE_ERROR;
-    }
-
-    server->route_table_len = max_route_len;
-    server->route_table = (struct tgx_route_table*)calloc(max_route_len, sizeof(struct tgx_route_table));
-    if(server->route_table == NULL)
-    {
-        config_destroy(&cfg); 
-        return TGX_ALLOC_ERROR;
     }
 
     server->service_name = sdsnew(sname);
@@ -431,6 +597,31 @@ tgx_err_t parse_cgf(struct tgx_server *server)
             server->cloud[i].name = sdsnew(name);
             server->cloud[i].host = sdsnew(host);
             server->cloud[i].port = port;
+
+            config_setting_t *list_setting = config_setting_lookup(obj, "list");
+            if(!list_setting)
+            {
+                continue;
+            }
+
+            /* 라우팅 테이블 추가 */
+            int llen = config_setting_length(list_setting);
+            for(int j=0; j<llen; j++)
+            {
+                config_setting_t *tmp = config_setting_get_elem(list_setting, j);
+                int value = config_setting_get_int(tmp);
+                struct tgx_route_table *rt = calloc(1, sizeof(struct tgx_route_table));
+                if(rt == NULL)
+                {
+                    continue;
+                } 
+                rt->host = sdsnew(host); 
+                rt->port = value;
+                //inet_pton(AF_INET, host, &rt->addr.sin_addr);
+                //rt->addr.sin_port = htons(value);
+
+                list_add_tail(&rt->list, &server->route_table);
+            }
         }
         
     }

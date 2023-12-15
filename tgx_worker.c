@@ -125,7 +125,7 @@ tgx_err_t do_bind(struct tgx_server *server, struct tgx_eventloop *eventloop, in
     }
 
     file->sock.is_listen = true;
-    file->sock.pair_fd = -1;
+    file->sock.v.port = service.port;
 
     if(eventloop_addevent(eventloop, file) != TGX_OK)
     {
@@ -164,7 +164,7 @@ void tgx_worker_poll(struct tgx_server *server, struct tgx_eventloop *eventloop,
                 {
                     continue;
                 }
-                printf("DELETE EVENT\n");
+                printf("[WORKER]DELETE EVENT : %d\n", file->fd);
             }
 
             /* 읽기 이벤트가 없다면 */
@@ -269,8 +269,8 @@ tgx_err_t tgx_worker_tcp_process(struct tgx_eventloop *eventloop,
     accept_file->sock.is_listen = false;
     connect_file->sock.is_listen = false;
 
-    accept_file->sock.pair_fd = connect_file->fd;
-    connect_file->sock.pair_fd = accept_file->fd;
+    accept_file->sock.v.pair_fd = connect_file->fd;
+    connect_file->sock.v.pair_fd = accept_file->fd;
 
     printf("accept fd : %d\n", accept_fd);
     printf("connect fd : %d\n", connect_fd);
@@ -339,7 +339,7 @@ void tgx_worker_reverse_proxy(void *arg)
 
     while(true)
     {
-        int ret = write(file->sock.pair_fd, buffer, total_size);
+        int ret = write(file->sock.v.pair_fd, buffer, total_size);
         if(ret < 0)
         {
             if(errno == EAGAIN)

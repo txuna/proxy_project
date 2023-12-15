@@ -57,8 +57,9 @@ struct tgx_service
 */
 struct tgx_route_table
 {
-    int inuse;
-    struct sockaddr_in addr;
+    sds host; 
+    int port;
+    struct list_head list;
 };
 
 struct tgx_server
@@ -67,14 +68,9 @@ struct tgx_server
     sds service_name;
     int cloud_len; 
     int service_len;
-    int route_table_len;
     struct tgx_cloud *cloud; 
     struct tgx_service *service;
-    /**
-     * route_table을 통해서 종단의 프록시 서버가 어떤 포트를 바인드하고 있는지 알 수 있음
-     * 즉, 클라이언트가 목적지 30000번으로 오면 라우팅 테이블보고 B 프록시 서버에 30000번 포트로 전송 가능
-    */
-    struct tgx_route_table *route_table;    /* 라우팅 테이블 */
+    struct list_head route_table;    /* 라우팅 테이블 */
     int bind_port;
     pid_t *process_list;        /* 프로세스 리스트 - server len */
     int **pipes;                /* service len */

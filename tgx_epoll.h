@@ -37,7 +37,10 @@ struct tgx_file
     struct tgx_sock
     {
         bool is_listen; /* listener fd인지 확인 */
-        int pair_fd;    /* 종단의 파일디스크립터 */
+        union{
+            int pair_fd;    /* 종단의 파일디스크립터 */
+            int port;       /* listener fd라면 바인딩 포트 */
+        }v;
     } sock;
     // read
     // write
