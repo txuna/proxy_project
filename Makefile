@@ -1,10 +1,10 @@
 
-LDLIBS = -lconfig
+LDLIBS = -lconfig -lpthread
 
 all: proxy
 
-proxy: main.o sds.o tgx_net.o tgx_worker.o tgx_epoll.o tgx_util.o
-	gcc -o proxy -g main.o sds.o tgx_net.o tgx_worker.o tgx_epoll.o tgx_util.o $(LDLIBS)
+proxy: main.o sds.o tgx_net.o tgx_worker.o tgx_epoll.o tgx_util.o thpool.o
+	gcc -o proxy -g main.o sds.o tgx_net.o tgx_worker.o tgx_epoll.o tgx_util.o thpool.o $(LDLIBS)
 
 main.o: main.h main.c 
 	gcc -c -o main.o main.c 
@@ -23,6 +23,9 @@ tgx_epoll.o : tgx_epoll.h tgx_epoll.c
 
 tgx_util.o : tgx_util.h tgx_util.c 
 	gcc -c -o tgx_util.o tgx_util.c
+
+thpool.o : thpool.h thpool.c 
+	gcc -c -o thpool.o thpool.c
 
 clean:
 	rm *.o proxy

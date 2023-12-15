@@ -15,6 +15,7 @@
 #include <netinet/ip.h> 
 
 #include "sds.h"
+#include "thpool.h"
 #include "list.h"
 
 typedef int socket_t;
@@ -46,6 +47,7 @@ struct tgx_service
     sds name;
     sds host; 
     int port;
+    int forward_port;
     proto_t proto;
 };
 

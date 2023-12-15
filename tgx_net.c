@@ -1,7 +1,5 @@
 #include "tgx_net.h"
 
-// serAdd.sin_addr.s_addr = inet_addr("127.0.0.1");
-
 static int __net_tcp_open(int port)
 {
     int flags;
@@ -119,24 +117,71 @@ tgx_err_t net_udp_open(int* fd, int port)
     return TGX_OK;
 }
 
-static int __net_tcp_connect()
+static int __net_tcp_connect(sds host, int port)
 {
+    int flags;
+    int fd;
+    struct sockaddr_in serv_addr; 
+    serv_addr.sin_family = AF_INET; 
+    serv_addr.sin_port = htons(port);   
+    inet_pton(AF_INET, host, &serv_addr.sin_addr);
 
+    fd = socket(PF_INET, SOCK_STREAM, 0);
+    if(fd < 0)
+    {
+        return -1;
+    }
+
+    if(connect(fd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0)
+    {
+        close(fd);
+        return -1;
+    }
+
+    if((flags = fcntl(fd, F_GETFL, 0)) < 0)
+    {
+        close(fd);
+        return -1;
+    }
+
+    if(fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
+    {
+        close(fd);
+        return -1;
+    }
+
+    return fd;
 }
 
-tgx_err_t net_tcp_connect()
+// serAdd.sin_addr.s_addr = inet_addr("127.0.0.1");
+tgx_err_t net_tcp_connect(int *fd, sds host, int port)
 {
+    *fd = __net_tcp_connect(host, port);
+    if(*fd < 0)
+    {
+        return TGX_SOCK_ERROR;
+    }
 
+    return TGX_OK;
 }
 
-static int __net_tcp_accept()
+static int __net_tcp_accept(int fd)
 {
-
+    struct sockaddr_in addr; 
+    socklen_t addr_len = sizeof(addr);
+    int newfd = accept4(fd, (struct sockaddr*)&addr, &addr_len, O_NONBLOCK);
+    return newfd;
 }
 
-tgx_err_t net_tcp_accept()
+tgx_err_t net_tcp_accept(int *fd, int listener_fd)
 {
+    *fd = __net_tcp_accept(listener_fd); 
+    if(*fd < 0)
+    {
+        return TGX_SOCK_ERROR;
+    }
 
+    return TGX_OK;
 }
 
 static int __net_tcp_read()

@@ -125,11 +125,17 @@ tgx_err_t do_proxy_eventloop(struct tgx_server *server)
 
     /* 메인 프록시 폴링 시작 */
     do_porxy_poll(server, eventloop);
- 
+    
+    /* 서비스 종료 */
     free_eventloop(eventloop);
     return TGX_OK;
 }
 
+/**
+ * Main Process의 역할은 자신의 클라우드에서 서비스중인 서비스가 상대 클라우드에 커넥션을 진행할 때 
+ * 프록시 느낌 - 이때는 라우팅 테이블 필요
+ * 파이프라인이 필요없지만 추후 대비해서 남겨놓기 
+*/
 void do_porxy_poll(struct tgx_server *server, struct tgx_eventloop *eventloop)
 {
     while(true)
@@ -270,6 +276,10 @@ void free_eventloop(struct tgx_eventloop *eventloop)
         close(file->fd);
         free(file);
     }
+
+    /* 스레드 풀 제거 */
+    thpool_wait(eventloop->thpool);
+    thpool_destroy(eventloop->thpool);
 
     close(eventloop->epfd);
     free(eventloop);
@@ -442,12 +452,13 @@ tgx_err_t parse_cgf(struct tgx_server *server)
         {
             config_setting_t *obj = config_setting_get_elem(setting, i);
             const char *name, *host; 
-            int port;
+            int port, forward_port;
             proto_t proto;
 
             if(!(config_setting_lookup_string(obj, "name", &name)
                 && config_setting_lookup_string(obj, "host", &host)
                 && config_setting_lookup_int(obj, "port", &port)
+                && config_setting_lookup_int(obj, "forward_port", &forward_port)
                 && config_setting_lookup_int(obj, "proto", &proto)))
             {
                 continue;
@@ -457,6 +468,7 @@ tgx_err_t parse_cgf(struct tgx_server *server)
             server->service[i].host = sdsnew(host);
             server->service[i].port = port;
             server->service[i].proto = proto;
+            server->service[i].forward_port = forward_port;
         }
     }
 

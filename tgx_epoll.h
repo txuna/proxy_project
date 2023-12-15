@@ -6,6 +6,7 @@
 #include "tgx_net.h"
 #include "tgx_errno.h"
 #include "list.h"
+#include "thpool.h"
 
 #include <stdlib.h>
 #include <sys/epoll.h>
@@ -13,6 +14,9 @@
 
 #define MAX_EPOLL_SIZE 1024
 #define INFINITE -1
+#define MAX_THREAD_POOL 10
+
+
 
 /**
  * PIPE Line 포함해서 사용가능
@@ -26,6 +30,15 @@ struct tgx_file
     int mask;
     int type; /* TCP UDP PIPE fd */
     int fire_event; /* 활성화된 이벤트 */
+    int pair_fd;
+    /**
+     * pipe 파일에는 할당 X 
+    */
+    struct tgx_sock
+    {
+        bool is_listen; /* listener fd인지 확인 */
+        int pair_fd;    /* 종단의 파일디스크립터 */
+    } sock;
     // read
     // write
     struct list_head list;
@@ -36,11 +49,15 @@ struct tgx_eventloop
     int epfd;
     int maxsize; /* epoll 이벤트 확인 수 */
     int timeout;
-    /**
-     * 배열로 미리 할당해놓고 제한할까
-    */
     struct list_head events;  /* 관리하는 전체 파일들 */ 
     struct tgx_file **fired;   /* polling을 통해 활성화된 파일들 */
+    threadpool thpool;      /* 스레드 풀 */
+};
+
+struct thr_worker_arg
+{
+    struct tgx_service service;
+    int fd;
 };
 
 tgx_err_t do_pipe(struct tgx_server *server, struct tgx_eventloop *eventloop, int index);
