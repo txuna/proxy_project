@@ -192,7 +192,8 @@ void tgx_worker_poll(struct tgx_server *server, struct tgx_eventloop *eventloop,
                         /**
                          * process accept and connect 
                         */
-                        if(tgx_worker_tcp_process(eventloop, file, service) != TGX_OK)
+                        printf("worker tcp process\n");
+                        if(tcp_process(eventloop, file, service.host, service.forward_port) != TGX_OK)
                         {
                             continue;
                         }
@@ -202,7 +203,7 @@ void tgx_worker_poll(struct tgx_server *server, struct tgx_eventloop *eventloop,
                         /**
                          * 스레드풀 이용해서 read send 진행
                         */
-                       thpool_add_work(eventloop->thpool, tgx_worker_reverse_proxy, (void*)file);
+                       thpool_add_work(eventloop->thpool, tcp_network_process, (void*)file);
                     }
                     
                     break;
@@ -218,64 +219,6 @@ void tgx_worker_poll(struct tgx_server *server, struct tgx_eventloop *eventloop,
 
         free(eventloop->fired);
     }
-}
-
-tgx_err_t tgx_worker_tcp_process(struct tgx_eventloop *eventloop, 
-                            struct tgx_file *listener, 
-                            struct tgx_service service)
-{
-    int accept_fd, connect_fd; 
-
-    if(net_tcp_accept(&accept_fd, listener->fd) != TGX_OK)
-    {
-        return TGX_SOCK_ERROR;
-    }
-
-    struct tgx_file *accept_file = file_alloc(accept_fd, EPOLLET | EPOLLIN | EPOLLHUP | EPOLLRDHUP | EPOLLERR, TGX_TCP);
-    if(accept_file == NULL)
-    {
-        close(accept_fd);
-        return TGX_SOCK_ERROR;
-    }
-
-    if(eventloop_addevent(eventloop, accept_file) != TGX_OK)
-    {
-        close(accept_fd);
-        free(accept_file);
-        return TGX_SOCK_ERROR;
-    }
-
-    if(net_tcp_connect(&connect_fd, service.host, service.forward_port) != TGX_OK)
-    {
-        return TGX_SOCK_ERROR;
-    }
-
-    struct tgx_file *connect_file = file_alloc(connect_fd, EPOLLET | EPOLLIN | EPOLLHUP | EPOLLRDHUP | EPOLLERR, TGX_TCP);
-    if(connect_file == NULL)
-    {
-        eventloop_delevent(eventloop, accept_file);
-        close(connect_fd);
-        return TGX_SOCK_ERROR;
-    }
-
-    if(eventloop_addevent(eventloop, connect_file) != TGX_OK)
-    {
-        eventloop_delevent(eventloop, accept_file);
-        close(connect_fd);
-        free(connect_file);
-        return TGX_SOCK_ERROR;
-    }
-
-    accept_file->sock.is_listen = false;
-    connect_file->sock.is_listen = false;
-
-    accept_file->sock.v.pair_fd = connect_file->fd;
-    connect_file->sock.v.pair_fd = accept_file->fd;
-
-    printf("accept fd : %d\n", accept_fd);
-    printf("connect fd : %d\n", connect_fd);
-
-    return TGX_OK;
 }
 
 /* read하고 send */
@@ -306,10 +249,9 @@ void tgx_worker_reverse_proxy(void *arg)
             {
                 continue;
             }
-            else
-            {
-                break;
-            }
+            
+            printf("worker read errno : %d\n", errno);
+            break;
         }
         total_size += nsize;
         /**
@@ -330,11 +272,10 @@ void tgx_worker_reverse_proxy(void *arg)
                 return;
             }
             size = can_read_len;
+            continue;
         }
-        else
-        {
-            break;
-        }
+        
+        break;
     }
 
     while(true)
@@ -347,12 +288,14 @@ void tgx_worker_reverse_proxy(void *arg)
                 continue;
             }
 
+            printf("worker send errno : %d\n", errno);
             break;
         }
 
         break;
     }
 
+    free(buffer);
     return;
 }
 

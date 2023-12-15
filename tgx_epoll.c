@@ -112,3 +112,134 @@ struct tgx_file *file_alloc(int fd, int mask, int type)
 
     return file;
 }
+
+void tcp_network_process(void *arg)
+{
+    struct tgx_file *file = (struct tgx_file*)arg;
+    int can_read_len; 
+    int size = SOCK_BUFFER;
+    char *buffer = calloc(1, sizeof(char) * SOCK_BUFFER);
+    int nsize = 0;
+    int total_size = 0;
+    /* 여기서 끝내면 EPOLLET라서 데이터를 못 읽는데 조금 더 우아하게 끝내는 법 찾기 */
+    if(buffer == NULL)
+    {
+        return;
+    }
+    
+    while(true)
+    {
+        nsize = read(file->fd, buffer, size);
+        if(nsize < 0)
+        {
+            if(errno == EAGAIN)
+            {
+                continue;
+            }
+            
+            printf("read errno : %d\n", errno);
+            break;
+        }
+        total_size += nsize;
+        /**
+         * 더 읽을 버퍼가 있다는 뜻
+        */
+        if(nsize == SOCK_BUFFER)
+        {
+            if(socket_nread(file->fd, &can_read_len) == -1)
+            {
+                break;
+            }
+
+            total_size += can_read_len;
+            // NEED TO CHECK NULL;
+            buffer = realloc(buffer, sizeof(char) * total_size);
+            if(buffer == NULL)
+            {
+                return;
+            }
+            size = can_read_len;
+            continue;
+        }
+
+        break;
+    }
+
+    while(true)
+    {
+        int ret = write(file->sock.v.pair_fd, buffer, total_size);
+        if(ret < 0)
+        {
+            if(errno == EAGAIN)
+            {
+                continue;
+            }
+
+            printf("send errno : %d\n", errno);
+            break;
+        }
+        
+        break;
+    }
+
+    free(buffer);
+    return;
+}
+
+tgx_err_t tcp_process(struct tgx_eventloop *eventloop, 
+                            struct tgx_file *listener, 
+                            sds host, int port)
+{
+    int accept_fd, connect_fd; 
+
+    if(net_tcp_accept(&accept_fd, listener->fd) != TGX_OK)
+    {
+        return TGX_SOCK_ERROR;
+    }
+
+    struct tgx_file *accept_file = file_alloc(accept_fd, EPOLLET | EPOLLIN | EPOLLHUP | EPOLLRDHUP | EPOLLERR, TGX_TCP);
+    if(accept_file == NULL)
+    {
+        close(accept_fd);
+        return TGX_SOCK_ERROR;
+    }
+
+    if(eventloop_addevent(eventloop, accept_file) != TGX_OK)
+    {
+        close(accept_fd);
+        free(accept_file);
+        return TGX_SOCK_ERROR;
+    }
+
+    if(net_tcp_connect(&connect_fd, host, port) != TGX_OK)
+    {
+        return TGX_SOCK_ERROR;
+    }
+
+    struct tgx_file *connect_file = file_alloc(connect_fd, EPOLLET | EPOLLIN | EPOLLHUP | EPOLLRDHUP | EPOLLERR, TGX_TCP);
+    if(connect_file == NULL)
+    {
+        eventloop_delevent(eventloop, accept_file);
+        close(connect_fd);
+        return TGX_SOCK_ERROR;
+    }
+
+    if(eventloop_addevent(eventloop, connect_file) != TGX_OK)
+    {
+        eventloop_delevent(eventloop, accept_file);
+        close(connect_fd);
+        free(connect_file);
+        return TGX_SOCK_ERROR;
+    }
+
+    accept_file->sock.is_listen = false;
+    connect_file->sock.is_listen = false;
+
+    accept_file->sock.v.pair_fd = connect_file->fd;
+    connect_file->sock.v.pair_fd = accept_file->fd;
+
+    printf("accept fd : %d\n", accept_fd);
+    printf("connect fd : %d\n", connect_fd);
+
+    return TGX_OK;
+}

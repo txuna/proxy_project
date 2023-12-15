@@ -13,6 +13,8 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include <stdlib.h>
+
 #include <netinet/in.h>
 #include <netinet/ip.h> 
 
@@ -40,4 +42,5 @@ tgx_err_t net_udp_read();
 
 tgx_err_t pipe_read();
 tgx_err_t pipe_write();
+
 #endif

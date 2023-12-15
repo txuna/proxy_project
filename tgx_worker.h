@@ -10,7 +10,5 @@
 
 void tgx_worker_process(struct tgx_server *server, int index);
 void tgx_worker_poll(struct tgx_server *server, struct tgx_eventloop *eventloop, int index);
-tgx_err_t tgx_worker_tcp_process(struct tgx_eventloop *eventloop, struct tgx_file *listener, struct tgx_service service);
-void tgx_worker_reverse_proxy(void *arg);
 
 #endif 

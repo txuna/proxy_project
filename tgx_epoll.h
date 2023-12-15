@@ -72,4 +72,7 @@ tgx_err_t eventloop_delevent(struct tgx_eventloop *eventloop, struct tgx_file *f
 int eventloop_poll(struct tgx_eventloop *eventloop);
 void set_handler();
 
+tgx_err_t tcp_process(struct tgx_eventloop *eventloop, struct tgx_file *listener, sds host, int port);
+void tcp_network_process(void *arg);
+
 #endif
